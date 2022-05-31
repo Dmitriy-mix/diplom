@@ -18,16 +18,7 @@ const firestore = getFirestore()
 
 const express = require("express");
 const cors = require('cors')
-const exec = require('executive');
 const bodyParser = require("body-parser");
-const fs = require("fs");
-const async = require("async");
-const path = require("path");
-const http = require('http');
-const querystring = require('querystring');
-
-
-
 
 const app = express();
 
@@ -43,28 +34,32 @@ const projectsCollection = collection(firestore, 'projects')
 const requestsCollection = collection(firestore, 'requests')
 const sprintsCollection = collection(firestore, 'sprints')
 
+
+
+
+/* User -------------------------------------------------------------------------------------------------------------------------------*/
+
 app.post('/api/users/create', function (req, res) {
   let request = req.body
     
+  addDoc(usersCollection, {
+    firstName: request.firstName,
+    lastName: request.lastName,
+    username: request.username,
+    password: request.password,
+    photo: request.photo,
+    id: '',
+    projectId: ''
+  })
 
-   addDoc(usersCollection, {
-      firstName: request.firstName,
-      lastName: request.lastName,
-      username: request.username,
-      password: request.password,
-      photo: request.photo,
-      id: '',
-      projectId: ''
+    .then(()=>{
+      res.send({
+        status: "ok"
+      });
     })
-
-      .then(()=>{
-        res.send({
-          status: "ok"
-        });
-      })
-      .catch((error) => {
-        res.send({error});
-      })
+    .catch((error) => {
+      res.send({error});
+    })
 })
 
 app.post('/api/users/authenticate', function (req, res) {
@@ -81,14 +76,15 @@ app.post('/api/users/authenticate', function (req, res) {
   let userSet = [];
 
   const myCollection = await getDocs(myUserQuery);
-  myCollection.forEach((element)=>{
-    let userData = element.data()
-    userData['id'] = element.id
-    userSet.push(userData)
-    results = userSet;
-  })
+    myCollection.forEach((element)=>{
+      let userData = element.data()
+      userData['id'] = element.id
+      userSet.push(userData)
+      results = userSet;
+    })
 
-    const user = results.find(x => x.username == username && x.password == password);
+  const user = results.find(x => x.username == username && x.password == password);
+
   if (user != null) {
     res.send({
       results: user
@@ -113,23 +109,100 @@ app.get('/api/users/', function (req, res) {
   let results = [];
   let param = [];
   const myCollectionUsers = await getDocs(myUserQuery);
-  myCollectionUsers.forEach((element)=>{
-    let usersData = element.data()
-    usersData['id'] = element.id
-    delete usersData.password
-    param.push(usersData)
-   /*  console.log(`${JSON.stringify(param)}`) */
-    results = param;
-   /*  console.log(`Document ${element.id} contains ${JSON.stringify(element.data())}`) */
+    myCollectionUsers.forEach((element)=>{
+      let usersData = element.data()
+      usersData['id'] = element.id
+      delete usersData.password
+      param.push(usersData)
+      results = param;
+    })
+
+  res.send({
+    results
   })
-
-    res.send({
-      results
-
-  })
-
-
 }
+
+app.get('/api/user/:id', function (req, res) {
+  getUser(req, res)
+});
+
+ async function getUser(req, res) {
+  const userId = req.params.id
+  const ref = doc(firestore, 'users', userId)
+  const myCollectionUserId = await getDoc(ref)
+
+  if(myCollectionUserId.exists()){
+    res.send({
+      firstName: myCollectionUserId.data().firstName,
+      lastName: myCollectionUserId.data().lastName,
+      id: userId,
+      photo: myCollectionUserId.data().photo,
+      username: myCollectionUserId.data().username,
+      projectId: myCollectionUserId.data().projectId,
+   }) 
+  }
+   else {
+    res.send({
+      error: 'error user'
+    });
+   }
+  }
+
+  app.put('/api/user/:id', function (req, res) {
+    putUser(req, res)
+  });
+  
+    async function putUser(req, res) {
+    const userId = req.params.id
+    const userData = req.body
+    const myCollectionUsersId = doc(firestore, 'users', userId)
+
+    await updateDoc (
+      myCollectionUsersId, {
+        firstName: userData.firstName,
+        lastName: userData.lastName,
+        photo: userData.photo,
+        username: userData.username,
+        id: userId
+      }
+    )
+
+    .then(()=>{
+      res.send({
+        firstName: userData.firstName,
+        lastName: userData.lastName,
+        id: userData.id,
+        photo: userData.photo,
+        username: userData.username,
+      }) 
+    })
+    .catch((error) => {
+      res.send({error});
+    })
+  }
+
+  app.delete('/api/user/:id', function (req, res) {
+    deleteUser(req, res)
+  });
+  
+   async function deleteUser(req, res) {
+    const userId = req.params.id
+    const myCollectionUsersId = doc(firestore, 'users', userId)
+
+    await deleteDoc(myCollectionUsersId)
+
+    .then(()=>{
+      res.send({
+        status: "ok"
+     }) 
+    })
+    .catch((error) => {
+      res.send({error});
+    })
+    putReqUser(req, res)
+  }
+
+/* Projects -------------------------------------------------------------------------------------------------------------------------------*/
 
 app.get('/api/projects/', function (req, res) {
 
@@ -149,9 +222,7 @@ app.get('/api/projects/', function (req, res) {
     let projectsData = element.data()
     projectsData['id'] = element.id
     param.push(projectsData)
-/*     console.log(` ${JSON.stringify(param)}`) */
     results = param;
-    /* console.log(` ${JSON.stringify(results.data())}`) */
   })
     res.send({
       results
@@ -180,16 +251,16 @@ async function registerProjects(req, res) {
     paramRes = param.length;
   })
 
-  addDoc(projectsCollection, {
-    verbose_name: request.verbose_name,
-    description: request.description,
-    active: request.active,
-    user_create: request.user,
-    number_project: paramRes + 1,
-    sprint: "",
-    board: [],
-    tasks: []
-  })
+    addDoc(projectsCollection, {
+      verbose_name: request.verbose_name,
+      description: request.description,
+      active: request.active,
+      user_create: request.user,
+      number_project: paramRes + 1,
+      sprint: "",
+      board: [],
+      tasks: []
+    })
 
     .then(()=>{
       res.send({
@@ -203,6 +274,7 @@ async function registerProjects(req, res) {
         tasks: []
       });
     })
+
     .catch((error) => {
       res.send({error});
       res.sendStatus(400)
@@ -215,9 +287,7 @@ async function registerProjects(req, res) {
   
    async function putProject(req, res) {
     const projectsId = req.params.id
-  /*   console.log(` ${projectsId}`) */
     const usersId = req.body.id
-   /*  console.log(req.body) */
     const myCollectionUsersId = doc(firestore, 'users', usersId)
 
 
@@ -259,389 +329,297 @@ async function registerProjects(req, res) {
     })
   }
 
-  app.get('/api/user/:id', function (req, res) {
-    getUser(req, res)
+
+
+  app.get('/api/project/:id', function (req, res) {
+    getProjectId(req, res)
   });
   
-   async function getUser(req, res) {
-    const userId = req.params.id
-    const ref = doc(firestore, 'users', userId)
-    const myCollectionUserId = await getDoc(ref)
+    async function getProjectId(req, res) {
+    const projectId = req.params.id
+    const ref = doc(firestore, 'projects', projectId)
+    const myCollectionProjectId = await getDoc(ref)
 
-    if(myCollectionUserId.exists()){
+    if(myCollectionProjectId.exists()){
       res.send({
-        firstName: myCollectionUserId.data().firstName,
-        lastName: myCollectionUserId.data().lastName,
-        id: userId,
-        photo: myCollectionUserId.data().photo,
-        username: myCollectionUserId.data().username,
-        projectId: myCollectionUserId.data().projectId,
-     }) 
+        results: myCollectionProjectId.data()
+      }) 
     }
-     else {
-        res.send({
-          error: 'error user'
-        });
-
-     }
+    else {
+      res.send({
+        error: 'error project'
+      });
     }
+  }
 
-    app.get('/api/project/:id', function (req, res) {
-      getProjectId(req, res)
-    });
-    
-     async function getProjectId(req, res) {
-      const projectId = req.params.id
-      const ref = doc(firestore, 'projects', projectId)
-      const myCollectionProjectId = await getDoc(ref)
+  app.get('/api/project/requests/:id', function (req, res) {
+    getProjectRequests(req, res)
+  });
   
-      if(myCollectionProjectId.exists()){
-     /*    console.log(myCollectionProjectId.data()) */
-        res.send({
-          results: myCollectionProjectId.data()
-       }) 
-      }
-       else {
-          res.send({
-            error: 'error project'
-          });
-  
-       }
-      }
-
-    app.put('/api/user/:id', function (req, res) {
-      putUser(req, res)
-    });
-    
-     async function putUser(req, res) {
-      const userId = req.params.id
-      const userData = req.body
-      const myCollectionUsersId = doc(firestore, 'users', userId)
-
-      await updateDoc (
-        myCollectionUsersId, {
-          firstName: userData.firstName,
-          lastName: userData.lastName,
-          photo: userData.photo,
-          username: userData.username,
-          id: userId
-        }
-      )
-  
-      .then(()=>{
-        res.send({
-          firstName: userData.firstName,
-          lastName: userData.lastName,
-          id: userData.id,
-          photo: userData.photo,
-          username: userData.username,
-       }) 
-      })
-      .catch((error) => {
-        res.send({error});
-      })
-    }
-
-    app.put('/api/requests/user/:id', function (req, res) {
-      putReqUser(req, res)
-    });
-    
-     async function putReqUser(req, res) {
-      const userId = req.params.id
-      const userData = req.body
-
-
-      const myRequestsQuery = query( 
-        collection(firestore, 'requests'),
-        where('username.id', '==', userId),
-        limit(),
-
-      );
-
-      const myCollectionProjectId = await getDocs(myRequestsQuery)
-
-      myCollectionProjectId.forEach(async (element) => {
-
-      let new_data = element.data()
-      new_data.username = userData
-      const myCollectionUsersUpdate = doc(firestore, 'requests', element.id)      
-      
-      if(Object.keys(userData).length == 0){
-        await updateDoc (
-          myCollectionUsersUpdate, {
-           username: ""
-          }
-        )
-      } if (Object.keys(userData).length != 0) {
-        await updateDoc (
-          myCollectionUsersUpdate, {
-           username: {
-            firstName: userData.firstName,
-            lastName: userData.lastName,
-            photo: userData.photo,
-            username: userData.username,
-            password: userData.password,
-            id: userId
-           }
-          }
-        )
-      }
-    })
-    }
-
-
-    app.delete('/api/user/:id', function (req, res) {
-      deleteUser(req, res)
-    });
-    
-     async function deleteUser(req, res) {
-      const userId = req.params.id
-     /*  console.log(` ${JSON.stringify(userId)}`) */
-      const myCollectionUsersId = doc(firestore, 'users', userId)
-  
-  
-      await deleteDoc(myCollectionUsersId)
-  
-      .then(()=>{
-        res.send({
-          status: "ok"
-       }) 
-      })
-      .catch((error) => {
-        res.send({error});
-      })
-      putReqUser(req, res)
-    }
-
-    app.get('/api/requests/:id', function (req, res) {
-
-      getRequests(req, res)
-    });
-    
-     async function getRequests(req, res) {
-      let requestId = req.params.id
-
-      const myRequestsQuery = query( 
+    async function getProjectRequests(req, res) {
+    const requestsId = req.params.id
+    const myRequestsQuery = query( 
       collection(firestore, 'requests'),
       limit()
     );
-    
-      let results = [];
-      let param = [];
-      const myCollectionRequests = await getDocs(myRequestsQuery);
-      myCollectionRequests.forEach((element)=>{
-        if(element.data().projectId == requestId){
-          let requestsData = element.data()
-          requestsData['id'] = element.id
-          param.push(requestsData)
-          results = param;
-        }
-      })
-        res.send({
-          results
-       }) 
-    }
+  
+    let param = [];
+    let results = [];
+    const myCollectionRequestsId = await getDocs(myRequestsQuery);
 
-    app.get('/api/requests/:id/new', function (req, res) {
-
-      getRequestsNew(req, res)
-    });
-    
-     async function getRequestsNew(req, res) {
-      let projectId = req.params.id
-
-      const myRequestsQuery = query( 
-      collection(firestore, 'requests'),
-      limit()
-    );
-    
-      let results = [];
-      let param = [];
-      const myCollectionRequests = await getDocs(myRequestsQuery);
-      myCollectionRequests.forEach((element)=>{
-        if(element.data().projectId == projectId && element.data().blackboard == false){
-          let requestsData = element.data()
-          requestsData['id'] = element.id
-          param.push(requestsData)
-          results = param;
-        }
-      })
-        res.send({
-          results
-       }) 
-    }
-
-    app.post('/api/request/register', function (req, res) {
-
-      registerRequest(req, res)
-    })
-    
-    async function registerRequest(req, res) {
-      let request = req.body
-
-      const myRequestsQuery = query( 
-        collection(firestore, 'requests'),
-        limit()
-      );
-    
-      let paramRes = 0;
-      let param = [];
-      const myCollectionRequests = await getDocs(myRequestsQuery);
-       myCollectionRequests.forEach((element)=>{
+    myCollectionRequestsId.forEach((element)=>{
+      if(element.data().projectId == requestsId){
         let requestsData = element.data()
-        param.push(requestsData)       
-        paramRes = param.length;
-      })
-          
-      addDoc(requestsCollection, {
-        verbose_name: request.verbose_name,
-        description: request.description,
-        status: request.status,
-        username: request.username ? request.username : '',
-        blackboard: request.blackboard,
-        projectId: request.projectId,
-        number: paramRes + 1,
-        subtasks: []
-      })
-    
-        .then(()=>{
-          res.send({
-            verbose_name: request.verbose_name,
-            description: request.description,
-            status: request.status,
-            username: request.username.id,
-            projectId: request.projectId,
-            blackboard: request.blackboard,
-          });
-        })
-        .catch((error) => {
-          res.send({error});
-        })
+        requestsData['id'] = element.id
+        param.push(requestsData)
+        results = param;
       }
-
-      app.delete('/api/request/:id', function (req, res) {
-        deleteRequest(req, res)
-      });
-      
-       async function deleteRequest(req, res) {
-        const requestDeleteId = req.params.id
-        const myCollectionRequests = doc(firestore, 'requests', requestDeleteId)
-    
-    
-        await deleteDoc(myCollectionRequests)
-    
-        .then(()=>{
-          res.send({
-            status: "ok"
-         }) 
-        })
-        .catch((error) => {
-          res.send({error});
-        })
-      }
-
-
-      app.get('/api/requests/user/:id', function (req, res) {
-        getRequestsUserId(req, res)
-      });
-      
-       async function getRequestsUserId(req, res) {
-        const requestsId = req.params.id
-        const myRequestsQuery = query( 
-          collection(firestore, 'requests'),
-          limit()
-        );
-      
-        let param = [];
-        let results = [];
-        const myCollectionRequestsId = await getDocs(myRequestsQuery);
-
-        myCollectionRequestsId.forEach((element)=>{
-    /*       console.log(element.data()) */
-         if(element.data().username.id == requestsId){
-     /*      console.log(element.data()) */
-          let requestsData = element.data()
-          requestsData['id'] = element.id
-          param.push(requestsData)
-          results = param;
-        }
-        })   
-        res.send({
-          results: results ? results : []
-        })                 
-      }
-
-      app.get('/api/project/requests/:id', function (req, res) {
-        getProjectRequests(req, res)
-      });
-      
-       async function getProjectRequests(req, res) {
-        const requestsId = req.params.id
-     /*    console.log(requestsId) */
-        const myRequestsQuery = query( 
-          collection(firestore, 'requests'),
-          limit()
-        );
-      
-        let param = [];
-        let results = [];
-        const myCollectionRequestsId = await getDocs(myRequestsQuery);
-
-        myCollectionRequestsId.forEach((element)=>{
-         if(element.data().projectId == requestsId){
-          let requestsData = element.data()
-          requestsData['id'] = element.id
-          param.push(requestsData)
-          results = param;
-        }
-      })     
-          res.send({
-            results: results  ? results : []
-          }) 
-                           
-      }
+    })     
+    res.send({
+      results: results  ? results : []
+    })                      
+  }
   
   app.get('/api/project/:id/sprint', function (req, res) {
 
     getSprint(req, res)
   });
   
-    async function getSprint(req, res) {
-
-
-    const myCollectionProjectQuery = query( 
-      collection(firestore, 'projects'),
-      limit()
-    );
-    let numberSprint
-    const myCollectionProject = await getDocs(myCollectionProjectQuery);
-     myCollectionProject.forEach(async (element)=>{
-      numberSprint = element.data().sprint.number
-    })
-
-    const mySprintsQuery = query( 
+  async function getSprint(req, res) {
+    const collectionProjectId = req.params.id
+    
+    const mySprintsQuerySe = query( 
       collection(firestore, 'sprints'),
-      where('number', '==', numberSprint),
+      where('projectId', '==', collectionProjectId),
       limit()
     );
-    const myCollectionSprints = await getDocs(mySprintsQuery);
+    const myCollectionSprintsMy = await getDocs(mySprintsQuerySe);
 
     let param = [];
     let results = [];
-
-    myCollectionSprints.forEach(async(element)=>{
-      let projectsData = element.data()
+    let projectsData = [];
+    myCollectionSprintsMy.forEach(async(element)=>{
+      projectsData = element.data()
       projectsData['id'] = element.id
       param.push(projectsData)
+      results = param
+    
+    })
 
-      results = param[0];
+    results = results.sort((a,b) => {
+      return a.number < b.number ? 1 : a.number === b.number ? 0 : -1;
+    });
 
+    res.send({
+      results: results  ? results[0] : []
+    }) 
+  }
+
+    /* Requests -------------------------------------------------------------------------------------------------------------------------------*/
+
+  app.put('/api/requests/user/:id', function (req, res) {
+    putReqUser(req, res)
+  });
+  
+    async function putReqUser(req, res) {
+    const userId = req.params.id
+    const userData = req.body
+
+
+    const myRequestsQuery = query( 
+      collection(firestore, 'requests'),
+      where('username.id', '==', userId),
+      limit(),
+    );
+
+    const myCollectionProjectId = await getDocs(myRequestsQuery)
+
+    myCollectionProjectId.forEach(async (element) => {
+
+    let new_data = element.data()
+    new_data.username = userData
+    const myCollectionUsersUpdate = doc(firestore, 'requests', element.id)      
+    
+    if(Object.keys(userData).length == 0){
+      await updateDoc (
+        myCollectionUsersUpdate, {
+          username: ""
+        }
+      )
+    } if (Object.keys(userData).length != 0) {
+      await updateDoc (
+        myCollectionUsersUpdate, {
+          username: {
+          firstName: userData.firstName,
+          lastName: userData.lastName,
+          photo: userData.photo,
+          username: userData.username,
+          password: userData.password,
+          id: userId
+          }
+        }
+      )
+    }
+  })
+  }
+
+  app.get('/api/requests/:id', function (req, res) {
+
+    getRequests(req, res)
+  });
+  
+    async function getRequests(req, res) {
+    let requestId = req.params.id
+
+    const myRequestsQuery = query( 
+    collection(firestore, 'requests'),
+    limit()
+  );
+  
+    let results = [];
+    let param = [];
+    const myCollectionRequests = await getDocs(myRequestsQuery);
+    myCollectionRequests.forEach((element)=>{
+      if(element.data().projectId == requestId){
+        let requestsData = element.data()
+        requestsData['id'] = element.id
+        param.push(requestsData)
+        results = param;
+      }
     })
       res.send({
-        results: results  ? results : []
-     }) 
-    
+        results
+      }) 
   }
+
+  app.get('/api/requests/:id/new', function (req, res) {
+
+    getRequestsNew(req, res)
+  });
+  
+    async function getRequestsNew(req, res) {
+    let projectId = req.params.id
+
+    const myRequestsQuery = query( 
+    collection(firestore, 'requests'),
+    limit()
+  );
+  
+    let results = [];
+    let param = [];
+    const myCollectionRequests = await getDocs(myRequestsQuery);
+    myCollectionRequests.forEach((element)=>{
+      if(element.data().projectId == projectId && element.data().blackboard == false){
+        let requestsData = element.data()
+        requestsData['id'] = element.id
+        param.push(requestsData)
+        results = param;
+      }
+    })
+      res.send({
+        results
+      }) 
+  }
+
+  app.post('/api/request/register', function (req, res) {
+
+    registerRequest(req, res)
+  })
+    
+  async function registerRequest(req, res) {
+      let request = req.body
+
+    const myRequestsQuery = query( 
+      collection(firestore, 'requests'),
+      limit()
+    );
+  
+    let paramRes = 0;
+    let param = [];
+    const myCollectionRequests = await getDocs(myRequestsQuery);
+      myCollectionRequests.forEach((element)=>{
+      let requestsData = element.data()
+      param.push(requestsData)       
+      paramRes = param.length;
+    })
+        
+    addDoc(requestsCollection, {
+      verbose_name: request.verbose_name,
+      description: request.description,
+      status: request.status,
+      username: request.username ? request.username : '',
+      blackboard: request.blackboard,
+      projectId: request.projectId,
+      number: paramRes + 1,
+      subtasks: []
+    })
+  
+    .then(()=>{
+      res.send({
+        verbose_name: request.verbose_name,
+        description: request.description,
+        status: request.status,
+        username: request.username.id,
+        projectId: request.projectId,
+        blackboard: request.blackboard,
+      });
+    })
+    .catch((error) => {
+      res.send({error});
+    })
+  }
+
+  app.delete('/api/request/:id', function (req, res) {
+    deleteRequest(req, res)
+  });
+  
+    async function deleteRequest(req, res) {
+    const requestDeleteId = req.params.id
+    const myCollectionRequests = doc(firestore, 'requests', requestDeleteId)
+
+
+    await deleteDoc(myCollectionRequests)
+
+    .then(()=>{
+      res.send({
+        status: "ok"
+      }) 
+    })
+    .catch((error) => {
+      res.send({error});
+    })
+  }
+
+
+  app.get('/api/requests/user/:id', function (req, res) {
+    getRequestsUserId(req, res)
+  });
+  
+    async function getRequestsUserId(req, res) {
+    const requestsId = req.params.id
+    const myRequestsQuery = query( 
+      collection(firestore, 'requests'),
+      limit()
+    );
+  
+    let param = [];
+    let results = [];
+    const myCollectionRequestsId = await getDocs(myRequestsQuery);
+
+    myCollectionRequestsId.forEach((element)=>{
+      if(element.data().username.id == requestsId){
+      let requestsData = element.data()
+      requestsData['id'] = element.id
+      param.push(requestsData)
+      results = param;
+    }
+    })   
+    res.send({
+      results: results ? results : []
+    })                 
+  }
+
+  /* Sprint -------------------------------------------------------------------------------------------------------------------------------*/
 
   app.post('/api/sprint', function (req, res) {
 
@@ -652,18 +630,22 @@ async function registerProjects(req, res) {
     let request = req.body
     const mySprintsQuery = query( 
       collection(firestore, 'sprints'),
+      where('projectId', '==', request.projectId),
       limit()
     );
   
     let paramRes = 0;
     let param = [];
+    let id = ''
     const myCollectionSprints = await getDocs(mySprintsQuery);
 
     myCollectionSprints.forEach(async (element)=>{
       let sprintsData = element.data()
-      param.push(sprintsData)       
+      param.push(sprintsData)  
       paramRes = param.length;
+
     })
+    
 
     addDoc(sprintsCollection, {
       verbose_name: request.verbose_name,
@@ -685,13 +667,40 @@ async function registerProjects(req, res) {
       number: paramRes + 1,
     })
 
+  
     updateProject(req, res, paramRes)
+    updateSprints(req, res, paramRes)
 }
 
-async function updateProject(req, res, paramRes) {
+
+ async function updateSprints(req, res, paramRes) {
   let request = req.body
 
-  const myCollectionProjectUpdate = doc(firestore, 'projects', request.projectId)  
+  const mySprintsQuery = query( 
+    collection(firestore, 'sprints'),
+    where('projectId', '==', request.projectId),
+    limit()
+  );
+
+  const myCollectionSprints = await getDocs(mySprintsQuery);
+
+  myCollectionSprints.forEach(async (element)=>{
+    if(element.data().number != paramRes + 1){
+      const mySprintsUpdate = doc(firestore, 'sprints', element.id)  
+
+      await updateDoc (
+        mySprintsUpdate, {
+          active: false
+        })
+      } 
+    })
+  }
+
+
+  async function updateProject(req, res, paramRes) {
+   let request = req.body
+
+   const myCollectionProjectUpdate = doc(firestore, 'projects', request.projectId)  
 
     await updateDoc (
       myCollectionProjectUpdate, {
@@ -739,7 +748,7 @@ async function updateProject(req, res, paramRes) {
         tasks: tasksValue,
       }
     )
-      console.log(sprintTask)
+
     const myCollectionRequestsUpdate = doc(firestore, 'requests', sprintTask.task.id)  
     await updateDoc (
       myCollectionRequestsUpdate, { 
@@ -755,7 +764,6 @@ async function updateProject(req, res, paramRes) {
     .catch((error) => {
       res.send({error});
     })
-
   }
 
   app.post('/api/sprint/subtask/:id', function (req, res) {
@@ -795,7 +803,6 @@ async function updateProject(req, res, paramRes) {
       }
     )
     
-
     .then(()=>{
       res.send({
         status: "ok"
@@ -835,10 +842,9 @@ async function updateProject(req, res, paramRes) {
         subTasksValue = el.subtasks
       }     
     })
-    console.log(subTasksValue) 
+
     subTasksValue.forEach(async (el)=> {
       if(el.id == sprintSubTask.id){
-     /*    console.log(el)  */
         el.status = sprintSubTask.status
       }     
     })
@@ -858,6 +864,90 @@ async function updateProject(req, res, paramRes) {
     .catch((error) => {
       res.send({error});
     })
+  }
+
+   app.put('/api/sprint/:id/tasks/modify', function (req, res) {
+
+    modifySprintTask(req, res)
+  })
+
+  async function modifySprintTask(req, res) {
+    const sprintSubTasks = req.body
+    const sprintId = req.params.id
+
+    const mySprintsQuery = query( 
+      collection(firestore, 'sprints'),
+      limit()
+    );
+
+    const myCollectionSprintsUpdateTask = await getDocs(mySprintsQuery) 
+
+    let tasksValue = [];
+    let subTasksValue = [];
+    myCollectionSprintsUpdateTask.forEach(async(element)=>{
+      if(sprintId == element.id) {
+        tasksValue = element.data().tasks
+
+      }
+    })
+
+    tasksValue.forEach(async (el)=> {
+      if(el.id == sprintSubTasks.id){  
+        el.status = sprintSubTasks.status
+      }     
+    })
+
+    const myCollectionSprintsTaskUpdate = doc(firestore, 'sprints', sprintId)  
+
+    await updateDoc (
+      myCollectionSprintsTaskUpdate, { 
+        tasks: tasksValue,
+      }
+    )
+
+    const myCollectionSprintsRequerstUpdate = doc(firestore, 'requests', sprintSubTasks.id)  
+
+    await updateDoc (
+      myCollectionSprintsRequerstUpdate, { 
+        status: sprintSubTasks.status,
+      }
+    )
+    
+    .then(()=>{
+      res.send({
+        status: "ok"
+     }) 
+    })
+    .catch((error) => {
+      res.send({error});
+    })
+  }
+
+  app.get('/api/sprints/:id', function (req, res) {
+    getSprintsAll(req, res)
+  });
+  
+   async function getSprintsAll(req, res) {
+    const projectId = req.params.id
+    const mySprintsQuery = query( 
+      collection(firestore, 'sprints'),
+      where('projectId','==', projectId),
+      limit()
+    );
+
+    const myCollectionSprints = await getDocs(mySprintsQuery)
+    let param = [];
+    let results = [];
+    myCollectionSprints.forEach(async(element)=>{
+      let projectsData = element.data()
+      projectsData['id'] = element.id
+      param.push(projectsData)
+      results = param
+    })
+
+    res.send({
+      results: results  ? results : []
+   }) 
   }
 
 
