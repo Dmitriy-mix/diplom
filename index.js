@@ -950,6 +950,33 @@ async function registerProjects(req, res) {
    }) 
   }
 
+  app.post('/api/users/:id/task', function (req, res) {
+    appTaskUser(req, res)
+  });
+  
+   async function appTaskUser(req, res) {
+    const taskUserId = req.params.id
+    const taskUserBody = req.body
+
+    const myCollectionTaskUserUpdate = doc(firestore, 'requests', taskUserId) 
+
+    await updateDoc (
+      myCollectionTaskUserUpdate, { 
+        username: taskUserBody[0]
+      }
+    )
+
+    .then(()=>{
+      res.send({
+        results: taskUserBody[0]
+     }) 
+    })
+    .catch((error) => {
+      res.send({error});
+    })
+
+  }
+
 
 
 
